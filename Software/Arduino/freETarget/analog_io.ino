@@ -224,7 +224,11 @@ uint16_t max_analog(void)
  *----------------------------------------------------------------
  *
  * See TI Documentation for LM75
+ * http://www.ti.com/general/docs/suppproductinfo.tsp?distId=10&gotoUrl=http%3A%2F%2Fwww.ti.com%2Flit%2Fgpn%2Flm75b
  *
+ * The output of the LM75 is a signed nine bit number 
+ * -55C < temp < 125C
+ * 
  *--------------------------------------------------------------*/
  #define RTD_SCALE      (0.5)   // 1/2C / LSB
 
@@ -235,7 +239,7 @@ double temperature_C(void)
   int i;
 
   raw = 0xffff;
-  
+   
 /*
  *  Point to the temperature register
  */
