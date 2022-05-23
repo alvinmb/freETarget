@@ -764,9 +764,9 @@ void esp01_receive(void)
           i = 0;
           message_type = IS_CONNECT + IS_CLOSED + IS_IPD;  // Message could be anything
           state = WAIT_CONNECT;
-          channel = 0;
         }
-        else
+        
+        if ( (ch >= '0') && (ch <= '9') )
         {
           channel = ch - '0';            // Nothing, pretend it is a CONNECT channel identifier (ex 0,CONNECT)  
         }
@@ -794,7 +794,7 @@ void esp01_receive(void)
         i++;                            // Yes, wait for the next character
         if ( (message_type & IS_CONNECT) && (s_connect[i] == 0) )        // Reached the end of CONNECT?
         { 
-          Serial.print(T("{\"CONNECTION_START\": ")); Serial.print(channel); Serial.print(T("}"));
+          Serial.print(T("{\"CONNECTION_START\":")); Serial.print(channel); Serial.print(T("}"));
           esp01_connect[channel] = true;// Record the channel       
           POST_version();               // Send out the software version to keep the PC happy
           show_echo(0);                 // Send out the settings
@@ -802,7 +802,7 @@ void esp01_receive(void)
         }
         if ( (message_type & IS_CLOSED) && (s_closed[i] == 0) )         // Reached the end of CLOSED?
         {                 
-          Serial.print(T("{\"CONNECTION_CLOSE\": ")); Serial.print(channel); Serial.print(T("}"));
+          Serial.print(T("{\"CONNECTION_CLOSE\":")); Serial.print(channel); Serial.print(T("}"));
           esp01_connect[channel] = false;// No longer a valid channel
           state = WAIT_IDLE;            // Go back to waiting       
         }
