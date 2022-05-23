@@ -266,7 +266,7 @@ void loop()
  * Wait for the shot
  */
   case WAIT:
-    if ( (esp01_is_present() == false) || esp01_connected() )       // If the ESP01 is not present, or connected
+    if ( esp01_connected() )       // If the ESP01 is not present, or connected
     {
       set_LED(LED_READY);                                          // to a client, then the RDY light is steady on
     }
@@ -799,16 +799,20 @@ void hello(void)
  * 
  *----------------------------------------------------------------
  *
- * When the keep alive expires, send a new one out and reset
+ * When the keep alive expires, send a new one out and reset.
+ * 
+ * It is sent out to the USB port as a diagnostic check 
  * 
  *--------------------------------------------------------------*/
 void send_keep_alive(void)
 {
   char str[32];
   static int keep_alive_count = 0;
-  
-  sprintf(str, "{\"KEEP_ALIVE\":%d}", keep_alive_count++);
-  output_to_all(str);
 
+  if ( esp01_connected() )
+  {
+    sprintf(str, "{\"KEEP_ALIVE\":%d}", keep_alive_count++);
+    output_to_all(str);
+  }
   return;
 }

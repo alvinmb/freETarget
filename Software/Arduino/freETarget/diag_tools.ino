@@ -1169,6 +1169,8 @@ void show_sensor_status(unsigned int sensor_status)
   Serial.print(T("  Face Strike:")); Serial.print(face_strike);
   
   Serial.print(T("  V_Ref:")); Serial.print(TO_VOLTS(analogRead(V_REFERENCE)));
+  
+  Serial.print(T("  Temperature:")); Serial.print(temperature_C());
 
   Serial.print(T("  Switch:"));
   
