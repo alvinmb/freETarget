@@ -1171,6 +1171,8 @@ void show_sensor_status(unsigned int sensor_status)
   Serial.print(T("  V_Ref:")); Serial.print(TO_VOLTS(analogRead(V_REFERENCE)));
   
   Serial.print(T("  Temperature:")); Serial.print(temperature_C());
+  
+  Serial.print(T("  WiFi:")); Serial.print(esp01_is_present());                           // TRUE if WiFi is available
 
   Serial.print(T("  Switch:"));
   

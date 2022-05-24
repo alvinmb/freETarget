@@ -484,11 +484,11 @@ void show_echo(int v)
   sprintf(s, "\"WiFi Present\": %d, \n\r", esp01_is_present());                           // TRUE if WiFi is available
   output_to_all(s);
   
-  sprintf(s, "\"WiFi Client 0\": %d, \n\r", esp01_connect[0]);                            // TRUE if Client 0 connected
+  sprintf(s, "\"WiFi Channel 0\": %d, \n\r", esp01_connect[0]);                           // TRUE if Client 0 connected
   output_to_all(s);
-  sprintf(s, "\"WiFi Client 1\": %d, \n\r", esp01_connect[1]);                            // TRUE if Client 1 connected
+  sprintf(s, "\"WiFi Channel 1\": %d, \n\r", esp01_connect[1]);                           // TRUE if Client 1 connected
   output_to_all(s);
-  sprintf(s, "\"WiFi Client 2\": %d, \n\r", esp01_connect[2]);                            // TRUE if Client 2 connected
+  sprintf(s, "\"WiFi Channel 2\": %d, \n\r", esp01_connect[2]);                           // TRUE if Client 2 connected
   output_to_all(s);
   
   sprintf(s, "\"VERSION\": %s, \n\r", SOFTWARE_VERSION);                                  // Current software version
