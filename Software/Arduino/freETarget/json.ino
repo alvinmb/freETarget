@@ -481,15 +481,14 @@ void show_echo(int v)
   sprintf(s, "\"TIMER_COUNT\":%d, \n\r", (int)(SHOT_TIME * OSCILLATOR_MHZ));              // Maximum number of clock cycles to record shot (target dependent)
   output_to_all(s);
 
-  sprintf(s, "\"WiFi Present\": %d, \n\r", esp01_is_present());                           // TRUE if WiFi is available
+  sprintf(s, "\"WiFi_PRESENT\": %d, \n\r", esp01_is_present());                           // TRUE if WiFi is available
   output_to_all(s);
-  
-  sprintf(s, "\"WiFi Channel 0\": %d, \n\r", esp01_connect[0]);                           // TRUE if Client 0 connected
-  output_to_all(s);
-  sprintf(s, "\"WiFi Channel 1\": %d, \n\r", esp01_connect[1]);                           // TRUE if Client 1 connected
-  output_to_all(s);
-  sprintf(s, "\"WiFi Channel 2\": %d, \n\r", esp01_connect[2]);                           // TRUE if Client 2 connected
-  output_to_all(s);
+
+  for ( i=0; i != ESP01_N_CONNECT; i++)
+  {
+    sprintf(s, "\"WiFi_CONNECT %d\": %d, \n\r", i+1, esp01_connect[i]);                   // TRUE if Client[i] connected
+    output_to_all(s);
+  }
   
   sprintf(s, "\"VERSION\": %s, \n\r", SOFTWARE_VERSION);                                  // Current software version
   output_to_all(s);  

@@ -27,6 +27,6 @@ void         esp01_close(unsigned int channel);   // Close this connection
 /*
  * Definitions
  */
-#define MAX_CONNECTIONS 3                         // Allow up to 3 connections
+#define ESP01_N_CONNECT 4                         // Allow up to 4 connections
 
 #endif

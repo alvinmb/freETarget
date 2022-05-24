@@ -716,7 +716,7 @@ void tabata_control(void)
  *--------------------------------------------------------------*/
 void bye(void)
 {
-  char str[128];
+  char str[32];
 /*
  * Say Good Night Gracie!
  */
@@ -738,11 +738,8 @@ void bye(void)
         && ( AVAILABLE == 0)        // Or a character to arrive
         && ( is_running() == 0) )   // Or a shot arrives
   {
-    if ( esp01_is_present() )
-    {
-      esp01_receive();              // Accumulate input from the IP port.;
-    }
-  }
+    esp01_receive();                // Keep polling the WiFi to see if anything 
+  }                                 // turns up
   
   hello();                          // Back in action
   

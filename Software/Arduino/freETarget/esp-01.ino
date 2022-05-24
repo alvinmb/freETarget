@@ -22,8 +22,8 @@
  * 
  * Unfortunatly as a server, each ESP expects to see more than one
  * connection, so a transparent or passthrought mode is not possible.
- * Instead the incoming messages are tagged with a channel number
- * and outgoign messages are prepended with a channel number.
+ * Instead the incoming messages are tagged with a connection number
+ * and outgoign messages are prepended with a connection number.
  * 
  * Thus the function esp01_receive constantly listens on the serial
  * port, parses the input and saves only the message to a 
@@ -52,7 +52,7 @@ static char esp01_in_queue[32];         // Place to store incoming characters
 static int  esp01_in_ptr;               // Queue in pointer
 static int  esp01_out_ptr;              // Queue out pointer
 
-static bool esp01_connect[] = {false, false, false}; // Set to true when a channel (0-2) connects
+static bool esp01_connect[ESP01_N_CONNECT]; // Set to true when a client (0-3) connects
 
 /*----------------------------------------------------------------
  *
@@ -116,7 +116,7 @@ void esp01_init(void)
     Serial.print(T("\r\nESP-01: Failed ATE0"));
   }
   
-  WIFI_SERIAL.print(T("AT+RFPOWER=80\r\n"));          // Set almost max power
+  WIFI_SERIAL.print(T("AT+RFPOWER=82\r\n"));          // Set max power
   if ( (esp01_waitOK() == false) && ( is_trace ) )
   {
     Serial.print(T("\r\nESP-01: Failed AT+RFPOWER=80"));  
@@ -204,7 +204,7 @@ void esp01_init(void)
  *--------------------------------------------------------------*/
 bool esp01_restart(void)
 {
-  char ch;
+  unsigned int i;
   
 /*
  * Determine if the ESP-01 is attached to the Accessory Connector
@@ -224,9 +224,10 @@ bool esp01_restart(void)
 /*
  * All done, 
  */
-  esp01_connect[0] = false;
-  esp01_connect[1] = false;
-  esp01_connect[2] = false;
+  for (i=0; i != ESP01_N_CONNECT; i++)
+  {
+    esp01_connect[i] = false;
+  }
   
   return true;
 }
@@ -312,13 +313,16 @@ void esp01_test(void)
   Serial.print(T("\n\rSSID: FET-")); Serial.print(names[json_name_id]);
   Serial.print(T("\n\rResetting ESP-01"));
   
-  WIFI_SERIAL.print("+++");
+  WIFI_SERIAL.print(T("+++"));
   delay(ONE_SECOND);
-  WIFI_SERIAL.print("AT+RST\r\n");
+  WIFI_SERIAL.print(T("AT+RST\r\n"));
   
   Serial.print(T("\r\nSending AT\r\n"));
-  WIFI_SERIAL.print("AT\r\n");          // Send out an AT command to the port
-  
+  WIFI_SERIAL.print(T("AT\r\n"));          // Send out an AT command to the port
+
+/*
+ * Echo what comes back
+ */
   start = micros();
   while ( (micros() - start) < LONG_TIME )
   {
@@ -472,8 +476,7 @@ char esp01_read(void)
   else
   {
     ch = esp01_in_queue[esp01_out_ptr]; // Get the character out of the queueu
-    esp01_out_ptr++;                    // Bump up the output pointer
-    esp01_out_ptr %= sizeof(esp01_in_queue);// and wrap around
+    esp01_out_ptr = (esp01_out_ptr + 1) % sizeof(esp01_in_queue);// increment and wrap around
   }
 
 /*
@@ -540,7 +543,7 @@ unsigned int esp01_available(void)
  *
  * brief:    Send a string over the IP port
  * 
- * return:   TRUE if the channel is active
+ * return:   TRUE if the connection is active
  *
  *----------------------------------------------------------------
  *   
@@ -552,7 +555,7 @@ unsigned int esp01_available(void)
  *   
  *   The function operates on a bit of a kluge.  The ESP-01 has a 
  *   command AT+CIPSENDEX which will transmit the next N bytes 
- *   over the IP channel. The ESP-01 will also stop collecting 
+ *   over the IP connection. The ESP-01 will also stop collecting 
  *   bytes and send the data if a NULL is received.
  *   
  *   The function uses a state machine
@@ -570,31 +573,31 @@ unsigned int esp01_available(void)
 #define MAX_RETRY   3                   // Allow for 3 attempts to start
 #define ESP_BUFFER_SIZE  2048           // The ESP buffer size
 
-#define SEND_OFF    1                   // The send function is off
-#define SEND_READY  2                   // The send is ready to send
-#define SEND_BUSY   3                   // The buffer is being sent.
-#define SEND_WAIT   4                   // Wait for a long delay to expire
-#define SEND_ERROR  5                   // The send is in error, do nothing
+#define SEND_OFF    0                   // The send function is off
+#define SEND_READY  1                   // The send is ready to send
+#define SEND_BUSY   2                   // The buffer is being sent.
+#define SEND_WAIT   3                   // Wait for a long delay to expire
+#define SEND_ERROR  4                   // The send is in error, do nothing
 
-static unsigned int send_state[] = {SEND_OFF, SEND_OFF, SEND_OFF}; // State of each channel
+static unsigned int send_state[ESP01_N_CONNECT]; // State of each connection
 
 bool esp01_send_ch                      // Send a character
   (
     char ch,                            // Character to send
-    int  channel                          // Which channel (connection) to send on
+    int  connection                     // Which connection to send on
   )
 {
   char str[2];
 
   str[0] = ch;
   str[1] = 0;
-  esp01_send(str, channel);
+  esp01_send(str, connection);
 }
 
 bool esp01_send
   (
     char* str,                          // String to send
-    int  channel                          // Which channel (connection) to send on
+    int  connection                     // Which connection to send on
   )
 {
   long         timer;                   // Timer start
@@ -605,7 +608,7 @@ bool esp01_send
 /*
  * Determine if we actually have to do anything
  */
-  if ( esp01_connect[channel] == false )  // No connection on this channel
+  if ( esp01_connect[connection] == false )  // No connection on this connection
   {
     return false;
   }
@@ -616,10 +619,10 @@ bool esp01_send
   retry_count = MAX_RETRY;
   while ( 1 )
   {
-    switch ( send_state[channel] )
+    switch ( send_state[connection] )
     {
       case SEND_OFF:                                      // The ESP is not ready to send, 
-        sprintf(AT_command, "AT+CIPSENDEX=%d,%d\r\n", channel, ESP_BUFFER_SIZE); // Start and lie that we will send 2K of data
+        sprintf(AT_command, "AT+CIPSENDEX=%d,%d\r\n", connection, ESP_BUFFER_SIZE); // Start and lie that we will send 2K of data
         WIFI_SERIAL.print(AT_command);
         timer = micros();                               // Remember the starting time
         while ( (micros() - timer) < MAX_esp01_waitOK ) // Wait for the > to come back within a second
@@ -629,49 +632,49 @@ bool esp01_send
             ch = WIFI_SERIAL.read();
             if ( ch == '>' )                            // Is it the prompt?
             {
-              send_state[channel] = SEND_READY;         // Ready to send
+              send_state[connection] = SEND_READY;         // Ready to send
               break;                                    // Break from timer while
             }
           }
         }
-        if ( send_state[channel] == SEND_READY )
+        if ( send_state[connection] == SEND_READY )
         {
           break;                                        // All good, break from SEND_OFF state
         }
         retry_count--;
         if ( retry_count == 0 )
         {
-          send_state[channel] = SEND_ERROR;             // Fatal error, nothing more we can do
+          send_state[connection] = SEND_ERROR;             // Fatal error, nothing more we can do
           break;
         }
-        send_state[channel] = SEND_WAIT;
+        send_state[connection] = SEND_WAIT;
         break;
 
     case SEND_WAIT:
         WIFI_SERIAL.print(T("+++"));                    // Command not acted on
         delay(ONE_SECOND + ONE_SECOND/10);
-        send_state[channel] = SEND_OFF;
+        send_state[connection] = SEND_OFF;
         break;
       
     case SEND_READY:                                      // Ready to send a string
       WIFI_SERIAL.print(str);                             // Space left to send
-      WIFI_SERIAL.print("\\0");                           // The buffer is ready to send out.  Kick it off
-      send_state[channel] = SEND_BUSY;                    // Wait for the buffer to be sent
+      WIFI_SERIAL.print(T("\\0"));                        // The buffer is ready to send out.  Kick it off
+      send_state[connection] = SEND_BUSY;                    // Wait for the buffer to be sent
       break;                                              // 
 
     case SEND_BUSY:                                       // Wait for the buffer to be sent
        if ( esp01_waitOK() )
        {
-        send_state[channel] = SEND_OFF;                   // Ready to next time
+        send_state[connection] = SEND_OFF;                   // Ready to next time
         return true;
        }
-       send_state[channel] = SEND_ERROR;                  // Ran out of time, nothing we can do to
+       send_state[connection] = SEND_ERROR;                  // Ran out of time, nothing we can do to
        break;                                             // Fix it.
           
     case SEND_ERROR:                                      // An error occured.
-      send_state[channel] = SEND_OFF;                     // Go back to the off state
-      esp01_close(channel);                               // and discard this channel
-      Serial.print(T("{\"CHANNEL_ERROR\":")); Serial.print(channel); Serial.print(T("}"));
+      send_state[connection] = SEND_OFF;                     // Go back to the off state
+      esp01_close(connection);                               // and discard this connection
+      Serial.print(T("{\"connection_ERROR\":")); Serial.print(connection); Serial.print(T("}"));
       return false;                                       // And bail out                    
     }
   }
@@ -692,9 +695,9 @@ bool esp01_send
  *
  *----------------------------------------------------------------
  *   
- *   The ESP-01 receives incoming characters on the IP channel, 
+ *   The ESP-01 receives incoming characters on the IP connection, 
  *   parses the frame, and informs the application of what 
- *   channel received data, the length, and the contents
+ *   connection received data, the length, and the contents
  *   
  *   ex
  *   
@@ -712,16 +715,16 @@ bool esp01_send
  *   message and then buffers only the 'real' data so that it 
  *   can be extracted later on.
  *   
- *   While this ESP software keeps track of what channel is
- *   connected, esp01_receive() merges all of the channels into
+ *   While this ESP software keeps track of what connection is
+ *   connected, esp01_receive() merges all of the connections into
  *   a single input stream.
  *   
  *--------------------------------------------------------------*/
 
-#define WAIT_IDLE    0          // Wait for the + or channel,CONNECT to come along
+#define WAIT_IDLE    0          // Wait for the + or connection,CONNECT to come along
 #define WAIT_MESSAGE 1          // Wait for the a message to come along
 #define WAIT_CONNECT 2          // The for the CONNECT message to appear
-#define WAIT_CHANNEL 3          // Throw away the channel information
+#define WAIT_connection 3          // Throw away the connection information
 #define WAIT_SIZE    4          // Pull in the size buffer
 #define WAIT_DATA    5          // Pull in the rest of the buffer
 
@@ -740,7 +743,7 @@ void esp01_receive(void)
   static unsigned int state = WAIT_IDLE;// Receiver State
   static unsigned int count;            // Expected number of characters
   static unsigned int i;                // Itration counter
-  static unsigned int channel;          // Channel contained in CONNECT or CLOSED message
+  static unsigned int connection;          // connection contained in CONNECT or CLOSED message
   static unsigned int message_type;     // Mesages is one of CONNECT, CLOSED, or IPD
   
 /*
@@ -767,10 +770,9 @@ void esp01_receive(void)
           state = WAIT_CONNECT;
         }
         
-        if ( (ch >= '0') && (ch <= '2') ) // Allow only Channels 0,1,2
-        
+        if ( (ch >= '0') && (ch <= (ESP01_N_CONNECT + '0')) ) // Allow only legal connections
         {
-          channel = ch - '0';            // Nothing, pretend it is a CONNECT channel identifier (ex 0,CONNECT)  
+          connection = ch - '0';            // Nothing, pretend it is a CONNECT connection identifier (ex 0,CONNECT)  
         }
         break;
 
@@ -796,25 +798,25 @@ void esp01_receive(void)
         i++;                            // Yes, wait for the next character
         if ( (message_type & IS_CONNECT) && (s_connect[i] == 0) )        // Reached the end of CONNECT?
         { 
-          Serial.print(T("{\"CHANNEL_START\":")); Serial.print(channel); Serial.print(T("}"));
-          esp01_connect[channel] = true;// Record the channel       
+          Serial.print(T("{\"CONNECTION_START\":")); Serial.print(connection); Serial.print(T("}"));
+          esp01_connect[connection] = true;// Record the connection       
           POST_version();               // Send out the software version to keep the PC happy
           show_echo(0);                 // Send out the settings
           state = WAIT_IDLE;            // and go back to waiting
         }
         if ( (message_type & IS_CLOSED) && (s_closed[i] == 0) )         // Reached the end of CLOSED?
         {                 
-          Serial.print(T("{\"CHANNEL_CLOSE\":")); Serial.print(channel); Serial.print(T("}"));
-          esp01_connect[channel] = false;// No longer a valid channel
+          Serial.print(T("{\"CONNECTION_CLOSE\":")); Serial.print(connection); Serial.print(T("}"));
+          esp01_connect[connection] = false;// No longer a valid connection
           state = WAIT_IDLE;            // Go back to waiting       
         }
         if ( (message_type & IS_IPD) && (s_ipd[i] == 0) )               // Reached the end of IPD?
         {
-          state = WAIT_CHANNEL;         // Go and pick up the channel number
+          state = WAIT_connection;         // Go and pick up the connection number
         }
         break;
         
-      case WAIT_CHANNEL:                // Throw away the CHANNEL since all input goes into one stream
+      case WAIT_connection:                // Throw away the connection since all input goes into one stream
         if ( ch == ',' )                // Don't do anything until you see a comma
         {
           state = WAIT_SIZE;
@@ -835,8 +837,7 @@ void esp01_receive(void)
 
       case WAIT_DATA:
         esp01_in_queue[esp01_in_ptr] = ch;  // Save the data
-        esp01_in_ptr++;                     // and bump up the pointer
-        esp01_in_ptr %= sizeof(esp01_in_queue);
+        esp01_in_ptr = (esp01_in_ptr+1) % sizeof(esp01_in_queue);
         count--;                        // One less to read
         if ( count == 0 )               // No more?
         {
@@ -857,15 +858,27 @@ void esp01_receive(void)
  *
  * brief:    Return the connection status
  * 
- * return:   TRUE if any channel is connected
+ * return:   TRUE if any connection is connected
  *
  *----------------------------------------------------------------
  *   
+ *   Loops throught the available connections and ORs together the
+ *   status of each connection
  *   
  *--------------------------------------------------------------*/
 bool esp01_connected(void)
 { 
-  return esp01_connect[0] || esp01_connect[1] || esp01_connect[2];
+  unsigned int i;
+  bool return_value;
+
+  return_value = false;
+
+  for (i=0; i != ESP01_N_CONNECT; i++)
+  {
+    return_value |= esp01_connect[i];
+  }
+  
+  return return_value;
 }
 
 /*----------------------------------------------------------------
@@ -878,13 +891,13 @@ bool esp01_connected(void)
  *
  *----------------------------------------------------------------
  *   
- *   Close the connection associated with this channel (channel)
+ *   Close the connection associated with this connection (connection)
  *   
  *   
  *--------------------------------------------------------------*/
 void esp01_close
   (
-  unsigned int channel                  // Channel of connection to close
+  unsigned int connection                  // connection of connection to close
   )
 { 
   unsigned int i;
@@ -895,13 +908,13 @@ void esp01_close
  */
   if ( esp01_is_present() );
   {
-    WIFI_SERIAL.print("+++");
+    WIFI_SERIAL.print(T("+++"));
     delay(ONE_SECOND);
       
-    esp01_connect[channel] = false;                                 // and discard this channel
-    sprintf(str, "AT+CIPCLOSE=%d\r\n", channel);                    // Close this connection
+    esp01_connect[connection] = false;                                 // and discard this connection
+    sprintf(str, "AT+CIPCLOSE=%d\r\n", connection);                    // Close this connection
     WIFI_SERIAL.print(str);
-    sprintf(str, "{\"CHANNE_CLOSED\": %d}\r\n", channel);   // Close this connection
+    sprintf(str, "{\"CONNECTION_CLOSED\": %d}\r\n", connection);   // Close this connection
     Serial.print(str);
           
 /*

@@ -1010,7 +1010,7 @@ void multifunction_display(void)
 
   if ( esp01_is_present() )
   {
-    for (i=0; i != MAX_CONNECTIONS; i++ )
+    for (i=0; i != ESP01_N_CONNECT; i++ )
     {
       esp01_send(str, i);
     }
@@ -1028,7 +1028,6 @@ void multifunction_display(void)
   */
   return;
  }
-
 
 /*-----------------------------------------------------
  * 
