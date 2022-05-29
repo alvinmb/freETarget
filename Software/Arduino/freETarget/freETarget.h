@@ -14,7 +14,7 @@
 #include "esp-01.h"
 #include "json.h"
 
-#define SOFTWARE_VERSION "\"3.08.3 RC6 May 24, 2022\""
+#define SOFTWARE_VERSION "\"3.08.3 RC8 May 29, 2022\""
 #define REV_100    100
 #define REV_210    210
 #define REV_220    220

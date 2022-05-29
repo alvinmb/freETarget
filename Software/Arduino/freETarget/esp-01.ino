@@ -151,6 +151,12 @@ void esp01_init(void)
   {
     Serial.print(T("\r\nESP-01: Failed AT+CWDHCPS_DEF=1,2800,\"192.168.10.0\",\"192.168.10.8\""));
   }
+
+  WIFI_SERIAL.print(T("AT+CIPRECVMODE=0\r\n"));           // Normal Receive Mode
+  if ( (esp01_waitOK() == false) && (is_trace) )
+  {
+    Serial.print(T("\r\nESP-01: Failed AT+CIPRECVMODE=0"));
+  }
   
   WIFI_SERIAL.print(T("AT+CIPMODE=0\r\n"));           // Normal Transmission Mode
   if ( (esp01_waitOK() == false) && (is_trace) )
@@ -162,6 +168,12 @@ void esp01_init(void)
   if ( (esp01_waitOK() == false) && (is_trace) )
   {
     Serial.print(T("\r\nESP-01: Failed AT+CIPMUX=1"));
+  }
+
+  WIFI_SERIAL.print(T("AT+CIPSERVERMAXCONN="));  WIFI_SERIAL.print(ESP01_N_CONNECT); WIFI_SERIAL.print(T("\r\n")); // Turn on the server and listen on port 1090
+  if ( (esp01_waitOK() == false) && (is_trace) )
+  {
+    Serial.print(T("\r\nESP-01: Failed AT+CIPSERVER=1,1090"));
   }
   
   WIFI_SERIAL.print(T("AT+CIPSERVER=1,1090\r\n"));   // Turn on the server and listen on port 1090
@@ -323,20 +335,94 @@ void esp01_test(void)
 /*
  * Echo what comes back
  */
-  start = micros();
-  while ( (micros() - start) < LONG_TIME )
+  start = millis();
+  while ( (millis() - start) < LONG_TIME )
   {
     if ( WIFI_SERIAL.available() != 0 ) 
     {
       ch = WIFI_SERIAL.read();
       Serial.print(ch);
+      start = millis();
     }
   }
 
 /*
- * All done, return the esp-01 present stateUser Feedback for Shot Timer - Connect IQ Notification
+ * All done, return the esp-01 present state
  */
   Serial.print(T("\r\nTest Over"));
+  return;
+}
+
+
+/*----------------------------------------------------------------
+ *
+ * function: bool esp01_status
+ *
+ * brief:    Request and display stauts
+ * 
+ * return:   Displayed on screen
+ *
+ *----------------------------------------------------------------
+ *   
+ * The function issues a status command and sees what comes back
+ * then it issues a PING on the four IP addressees that should
+ * be attached to is.
+ *--------------------------------------------------------------*/
+void esp01_status(void)
+{
+  char ch;                                // Character read from ESP-01
+  long unsigned int start;                // Start time
+  unsigned int i;
+  char str[32];
+  
+/*
+ * Get the status of the connection
+ */
+  Serial.print(T("\n\resp01_status\r\n"));
+
+  WIFI_SERIAL.print(T("+++"));
+  delay(ONE_SECOND + ONE_SECOND/10);
+  WIFI_SERIAL.print(T("AT+CIPSTATUS\r\n"));
+
+  start = millis();
+  while ( (millis() - start) < ESP01_MAX_WAITOK )
+  {
+    if ( WIFI_SERIAL.available() != 0 ) 
+    {
+      ch = WIFI_SERIAL.read();                  // Echo what comes back
+      Serial.print(ch);
+      start = millis();
+    }
+  }
+
+/*
+ * Ping and see what comes back
+ */
+  Serial.print(T("\n\resp01_ping\r\n"));
+
+  for (i=0; i != ESP01_N_CONNECT; i++)
+  {
+    WIFI_SERIAL.print(T("+++"));
+    delay(ONE_SECOND + ONE_SECOND/10);
+    sprintf(str, "AT+PING=\"192.168.10.%d\"\r\n", i);
+    WIFI_SERIAL.print(str);
+    Serial.print(str);
+    start = millis();
+    while ( (millis() - start) < ESP01_MAX_WAITOK )
+    {
+      if ( WIFI_SERIAL.available() != 0 ) 
+      {
+        ch = WIFI_SERIAL.read();
+        Serial.print(ch);
+        start = millis();
+      }
+    }
+  }
+  
+/*
+ * All done, return the esp-01 present state
+ */
+  Serial.print(T("\r\nStatus Over\r\n"));
   return;
 }
 /*----------------------------------------------------------------
@@ -382,7 +468,7 @@ void esp01_test(void)
  *   The state machine ensures that OK is parsed
  *   
  *--------------------------------------------------------------*/
-#define MAX_esp01_waitOK  1000000       // 1M microseconds
+#define ESP01_MAX_WAITOK  2000          // 2000 milliseconds
 
 #define GOT_NUTHN 0                     // Decoding states
 #define GOT_O     1
@@ -393,18 +479,17 @@ static bool esp01_waitOK(void)
   unsigned int state;                   // OK decoding state
   long         start;                   // Timer start
 
-  start = micros();                     // Remember the starting time
+  start = millis();                     // Remember the starting time
   state = GOT_NUTHN;                    // Start off empty
   
 /*
  * Loop for a second and see if OK comes back
  */
-  while ( (micros() - start) < MAX_esp01_waitOK )
+  while ( (millis() - start) < ESP01_MAX_WAITOK )
   {
     if ( WIFI_SERIAL.available() != 0 ) 
     {
       ch = WIFI_SERIAL.read();
-
       switch (state)
       {
         default:
@@ -570,14 +655,12 @@ unsigned int esp01_available(void)
  *   The appplication must send a null to trigger the sending
  *   operation.
  *--------------------------------------------------------------*/
-#define MAX_RETRY   3                   // Allow for 3 attempts to start
-#define ESP_BUFFER_SIZE  2048           // The ESP buffer size
+#define MAX_RETRY   10                  // Number of retry attempts to start
 
 #define SEND_OFF    0                   // The send function is off
-#define SEND_READY  1                   // The send is ready to send
-#define SEND_BUSY   2                   // The buffer is being sent.
-#define SEND_WAIT   3                   // Wait for a long delay to expire
-#define SEND_ERROR  4                   // The send is in error, do nothing
+#define SEND_BUSY   1                   // The buffer is being sent.
+#define SEND_WAIT   2                   // Wait for a long delay to expire
+#define SEND_ERROR  3                   // Recover from an error
 
 static unsigned int send_state[ESP01_N_CONNECT]; // State of each connection
 
@@ -604,6 +687,7 @@ bool esp01_send
   unsigned int retry_count;             // Number of times to try again
   char AT_command[64];                  // Place to store a string
   char ch;                              // Character read back
+  unsigned int len;                     // Length of string to send
   
 /*
  * Determine if we actually have to do anything
@@ -611,6 +695,22 @@ bool esp01_send
   if ( esp01_connect[connection] == false )  // No connection on this connection
   {
     return false;
+  }
+
+  len = 0;                                    // Figure out the size of the string
+  while (*(str+len) )
+  {
+    len++;
+  }
+  if ( len > ESP01_BUFFER_SIZE )
+  {
+    len = ESP01_BUFFER_SIZE;
+  }
+
+  while ( WIFI_SERIAL.available() != 0 )      // Eat any availble characters
+  {
+    ch = WIFI_SERIAL.read();
+    delay(2);
   }
   
 /*  
@@ -622,32 +722,37 @@ bool esp01_send
     switch ( send_state[connection] )
     {
       case SEND_OFF:                                      // The ESP is not ready to send, 
-        sprintf(AT_command, "AT+CIPSENDEX=%d,%d\r\n", connection, ESP_BUFFER_SIZE); // Start and lie that we will send 2K of data
+        sprintf(AT_command, "AT+CIPSEND=%d,%d\r\n", connection, len); // Start and lie that we will send 2K of data
         WIFI_SERIAL.print(AT_command);
-        timer = micros();                               // Remember the starting time
-        while ( (micros() - timer) < MAX_esp01_waitOK ) // Wait for the > to come back within a second
+        timer = millis();                               // Remember the starting time
+        while ( (millis() - timer) < ESP01_MAX_WAITOK ) // Wait for the > to come back within a second
         {
           if ( WIFI_SERIAL.available() != 0 )           // Something available?
           {
             ch = WIFI_SERIAL.read();
             if ( ch == '>' )                            // Is it the prompt?
             {
-              send_state[connection] = SEND_READY;         // Ready to send
+              WIFI_SERIAL.print(str);                   // Yes, ready to send
+              send_state[connection] = SEND_BUSY;       // Wait for the buffer to be sent
               break;                                    // Break from timer while
             }
           }
         }
-        if ( send_state[connection] == SEND_READY )
+        if ( send_state[connection] == SEND_BUSY)
         {
           break;                                        // All good, break from SEND_OFF state
         }
         retry_count--;
         if ( retry_count == 0 )
         {
-          send_state[connection] = SEND_ERROR;             // Fatal error, nothing more we can do
-          break;
+          send_state[connection] = SEND_ERROR;          // Fatal error, nothing more we can do
+          Serial.print("send error");
         }
-        send_state[connection] = SEND_WAIT;
+        else
+        {
+          send_state[connection] = SEND_WAIT;
+          Serial.print("send wait");
+        }
         break;
 
     case SEND_WAIT:
@@ -655,28 +760,26 @@ bool esp01_send
         delay(ONE_SECOND + ONE_SECOND/10);
         send_state[connection] = SEND_OFF;
         break;
-      
-    case SEND_READY:                                      // Ready to send a string
-      WIFI_SERIAL.print(str);                             // Space left to send
-      WIFI_SERIAL.print(T("\\0"));                        // The buffer is ready to send out.  Kick it off
-      send_state[connection] = SEND_BUSY;                    // Wait for the buffer to be sent
-      break;                                              // 
 
     case SEND_BUSY:                                       // Wait for the buffer to be sent
        if ( esp01_waitOK() )
        {
-        send_state[connection] = SEND_OFF;                   // Ready to next time
+        send_state[connection] = SEND_OFF;                // Ready to next time
         return true;
        }
-       send_state[connection] = SEND_ERROR;                  // Ran out of time, nothing we can do to
-       break;                                             // Fix it.
-          
-    case SEND_ERROR:                                      // An error occured.
-      send_state[connection] = SEND_OFF;                     // Go back to the off state
-      esp01_close(connection);                               // and discard this connection
-      Serial.print(T("{\"connection_ERROR\":")); Serial.print(connection); Serial.print(T("}"));
-      return false;                                       // And bail out                    
-    }
+       else
+       {
+        send_state[connection] = SEND_ERROR;
+       }
+       break;
+
+    case SEND_ERROR:
+        Serial.print(T("{\"SEND_ERROR\":")); Serial.print(connection); Serial.print(T(", \"SENDING\": \"")); Serial.print(str); Serial.print(T("\"}"));
+        esp01_status();
+        esp01_close(connection);                       // and discard this connection
+        send_state[connection] = SEND_OFF;             // Go back to the off state
+        return false;                                  // And bail out                    
+      }
   }
 
 /*
@@ -914,7 +1017,7 @@ void esp01_close
     esp01_connect[connection] = false;                                 // and discard this connection
     sprintf(str, "AT+CIPCLOSE=%d\r\n", connection);                    // Close this connection
     WIFI_SERIAL.print(str);
-    sprintf(str, "{\"CONNECTION_CLOSED\": %d}\r\n", connection);   // Close this connection
+    sprintf(str, "{\"CONNECTION_CLOSE\": %d}\r\n", connection);   // Close this connection
     Serial.print(str);
           
 /*
