@@ -28,7 +28,7 @@ void compute_vset_PWM(double value);   // Reference voltage control loop
 #define K_12     ((10000.0d + 2200.0d)/ 2200.0d) // Resistor divider
 #define ANALOG_VERSION 5        // Analog Version Input
 #define LED_PWM      5          // PWM Port
-#define vset_PWM    8          // Reference Voltage Control
+#define vset_PWM     8          // Reference Voltage Control
 #define MAX_ANALOG  0x3ff       // Largest analog input
 #define MAX_PWM      0xff       // PWM is an 8 bit port
 

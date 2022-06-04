@@ -115,7 +115,7 @@ void esp01_init(void)
   {
     Serial.print(T("\r\nESP-01: Failed ATE0"));
   }
-  
+
   WIFI_SERIAL.print(T("AT+RFPOWER=82\r\n"));          // Set max power
   if ( (esp01_waitOK() == false) && ( is_trace ) )
   {
@@ -151,12 +151,6 @@ void esp01_init(void)
   {
     Serial.print(T("\r\nESP-01: Failed AT+CWDHCPS_DEF=1,2800,\"192.168.10.0\",\"192.168.10.8\""));
   }
-
-  WIFI_SERIAL.print(T("AT+CIPRECVMODE=0\r\n"));           // Normal Receive Mode
-  if ( (esp01_waitOK() == false) && (is_trace) )
-  {
-    Serial.print(T("\r\nESP-01: Failed AT+CIPRECVMODE=0"));
-  }
   
   WIFI_SERIAL.print(T("AT+CIPMODE=0\r\n"));           // Normal Transmission Mode
   if ( (esp01_waitOK() == false) && (is_trace) )
@@ -170,12 +164,6 @@ void esp01_init(void)
     Serial.print(T("\r\nESP-01: Failed AT+CIPMUX=1"));
   }
 
-  WIFI_SERIAL.print(T("AT+CIPSERVERMAXCONN="));  WIFI_SERIAL.print(ESP01_N_CONNECT); WIFI_SERIAL.print(T("\r\n")); // Turn on the server and listen on port 1090
-  if ( (esp01_waitOK() == false) && (is_trace) )
-  {
-    Serial.print(T("\r\nESP-01: Failed AT+CIPSERVER=1,1090"));
-  }
-  
   WIFI_SERIAL.print(T("AT+CIPSERVER=1,1090\r\n"));   // Turn on the server and listen on port 1090
   if ( (esp01_waitOK() == false) && (is_trace) )
   {
@@ -310,8 +298,6 @@ bool esp01_is_present(void)
  * do anything with the AT command
  *   
  *--------------------------------------------------------------*/
-#define LONG_TIME (1000000 * 5)
-
 void esp01_test(void)
 {
   char ch;                                // Character read from ESP-01
@@ -336,7 +322,7 @@ void esp01_test(void)
  * Echo what comes back
  */
   start = millis();
-  while ( (millis() - start) < LONG_TIME )
+  while ( (millis() - start) < ESP01_MAX_WAITOK )
   {
     if ( WIFI_SERIAL.available() != 0 ) 
     {
@@ -368,6 +354,12 @@ void esp01_test(void)
  * then it issues a PING on the four IP addressees that should
  * be attached to is.
  *--------------------------------------------------------------*/
+
+static char* status_list[] = {"CWMODE_DEF",  "CWSAP_DEF", 
+                              "CWDHCP_DEF",  "CIPAP_DEF", 
+                              "CWDHCPS_DEF", "CIPMODE", 
+                              "CIPMUX",      "CIPSTO", 0};        // Status List
+
 void esp01_status(void)
 {
   char ch;                                // Character read from ESP-01
@@ -396,6 +388,27 @@ void esp01_status(void)
   }
 
 /*
+ * All of the settings
+ */
+  i=0;
+  while (status_list[i] != 0)
+  {
+    Serial.print(T("\r\nStatus: ")); Serial.print(status_list[i]); Serial.print(T("\r\n"));
+    WIFI_SERIAL.print(T("AT+")); WIFI_SERIAL.print(status_list[i]); WIFI_SERIAL.print(T("?\r\n"));
+    start = millis();
+    while ( (millis() - start) < ESP01_MAX_WAITOK )
+    {
+      if ( WIFI_SERIAL.available() != 0 ) 
+      {
+        ch = WIFI_SERIAL.read();                  // Echo what comes back
+        Serial.print(ch);
+        start = millis();
+      }
+    }
+    i++;
+  }
+  
+/*
  * Ping and see what comes back
  */
   Serial.print(T("\n\resp01_ping\r\n"));
@@ -422,7 +435,7 @@ void esp01_status(void)
 /*
  * All done, return the esp-01 present state
  */
-  Serial.print(T("\r\nStatus Over\r\n"));
+  Serial.print(T("\r\nDone\r\n"));
   return;
 }
 /*----------------------------------------------------------------
@@ -472,6 +485,7 @@ void esp01_status(void)
 
 #define GOT_NUTHN 0                     // Decoding states
 #define GOT_O     1
+#define GOT_E     2
 
 static bool esp01_waitOK(void)
 {
@@ -498,6 +512,10 @@ static bool esp01_waitOK(void)
           {
             state = GOT_O;
           }
+          if ( ch == 'E' )                // Got an E, wait for the ERROR
+          {
+            state = GOT_E;
+          }
           break;
 
         case GOT_O:
@@ -509,7 +527,17 @@ static bool esp01_waitOK(void)
           {
             state = GOT_NUTHN;            // Start over
           }
-          break;          
+          break;   
+
+       case GOT_E:
+          if ( ch == 'R' )                // Got E then R
+          {
+            return false;                 // Done with an error
+          }
+          else                            // Got E but no R
+          {
+            state = GOT_NUTHN;            // Start over
+          }
         }
       }
     }
@@ -827,7 +855,7 @@ bool esp01_send
 #define WAIT_IDLE    0          // Wait for the + or connection,CONNECT to come along
 #define WAIT_MESSAGE 1          // Wait for the a message to come along
 #define WAIT_CONNECT 2          // The for the CONNECT message to appear
-#define WAIT_connection 3          // Throw away the connection information
+#define WAIT_CONNECTION 3       // Throw away the connection information
 #define WAIT_SIZE    4          // Pull in the size buffer
 #define WAIT_DATA    5          // Pull in the rest of the buffer
 
@@ -915,11 +943,11 @@ void esp01_receive(void)
         }
         if ( (message_type & IS_IPD) && (s_ipd[i] == 0) )               // Reached the end of IPD?
         {
-          state = WAIT_connection;         // Go and pick up the connection number
+          state = WAIT_CONNECTION;         // Go and pick up the connection number
         }
         break;
         
-      case WAIT_connection:                // Throw away the connection since all input goes into one stream
+      case WAIT_CONNECTION:             // Throw away the connection since all input goes into one stream
         if ( ch == ',' )                // Don't do anything until you see a comma
         {
           state = WAIT_SIZE;

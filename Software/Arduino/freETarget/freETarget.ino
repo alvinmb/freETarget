@@ -56,7 +56,7 @@ void setup(void)
   Serial.begin(115200);
   AUX_SERIAL.begin(115200); 
   DISPLAY_SERIAL.begin(115200); 
-  
+
 /*
  *  Set up the port pins
  */

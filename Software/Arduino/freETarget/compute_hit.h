@@ -10,8 +10,8 @@
 #define S_SHOT      true        // Include the shot number
 #define S_XY        true        // Include X-Y coordinates
 #define S_POLAR     true        // Include polar coordinates
-#define S_COUNTERS  true        // Include counter values
-#define S_MISC      true        // Include miscelaneous diagnotics
+#define S_COUNTERS  false       // Include counter values
+#define S_MISC      false       // Include miscelaneous diagnotics
 #define S_SCORE     false       // Include estimated score
 
 /*

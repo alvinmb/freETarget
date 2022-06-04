@@ -14,7 +14,7 @@
 #include "esp-01.h"
 #include "json.h"
 
-#define SOFTWARE_VERSION "\"3.08.3 RC8 May 29, 2022\""
+#define SOFTWARE_VERSION "\"3.08.3 RC10 June 4, 2022\""
 #define REV_100    100
 #define REV_210    210
 #define REV_220    220
@@ -51,11 +51,6 @@ char GET (void)
 }
                    
 #define AVAILABLE ( Serial.available() | esp01_available() | DISPLAY_SERIAL.available() )
-
-#define PORT_SERIAL   1
-#define PORT_AUX      2
-#define PORT_DISPLAY  4
-#define PORT_ALL      (PORT_SERIAL + PORT_AUX + PORT_DISPLAY)
 
 /*
  * Oscillator Features

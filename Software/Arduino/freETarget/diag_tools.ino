@@ -289,11 +289,16 @@ void self_test(uint16_t test)
 
  /*
   * TEST 16 WiFI
+  * TEST 19 WiFi Status
   */
    case T_WIFI:
     esp01_test();
    break;
-
+   
+   case T_WIFI_STATUS:
+    esp01_status();
+   break;
+   
 /*
  * TEST 17 Dump NonVol
  */
